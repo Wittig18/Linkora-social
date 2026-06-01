@@ -5,25 +5,34 @@ import { Linking, StyleSheet, Text, TouchableOpacity } from "react-native";
 import { WalletProvider } from "../context/WalletContext";
 import { useWallet } from "../hooks/useWallet";
 import { parseDeepLink } from "../utils/deepLinks";
+import { ToastProvider } from "../context/ToastContext";
+import { useTheme } from "../theme/useTheme";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function HeaderWalletAddress() {
+  const { theme } = useTheme();
   const router = useRouter();
   const { address, connected } = useWallet();
 
   return (
-    <TouchableOpacity
-      style={styles.headerWallet}
+      <TouchableOpacity
+      style={[
+        styles.headerWallet,
+        {
+          backgroundColor: theme.colors.surface.surface1,
+          borderColor: theme.colors.surface.border,
+        },
+      ]}
       onPress={() => router.push("/connect" as Parameters<typeof router.push>[0])}
       accessibilityRole="button"
       accessibilityLabel={
         connected && address ? `Connected wallet ${address}` : "Open wallet connection screen"
       }
     >
-      <Text style={styles.headerWalletText}>
+      <Text style={[styles.headerWalletText, { color: theme.colors.text.primary }]}>
         {connected && address ? shortAddress(address) : "Connect"}
       </Text>
     </TouchableOpacity>
@@ -46,6 +55,7 @@ function HeaderWalletAddress() {
  */
 export default function RootLayout() {
   const router = useRouter();
+  const { theme } = useTheme();
 
   useEffect(() => {
     let isMounted = true;
@@ -82,43 +92,47 @@ export default function RootLayout() {
 
   return (
     <WalletProvider>
-      <Tabs
-        screenOptions={{
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: "#0f172a",
-          },
-          headerTitleStyle: {
-            color: "#f8fafc",
-            fontWeight: "700",
-          },
-          headerTintColor: "#f8fafc",
-          headerRight: () => <HeaderWalletAddress />,
-          tabBarActiveTintColor: "#6366f1",
-          tabBarInactiveTintColor: "#9ca3af",
-          tabBarStyle: {
-            backgroundColor: "#0f172a",
-            borderTopColor: "#1e293b",
-          },
-        }}
-      >
-        <Tabs.Screen name="(tabs)/feed" options={{ title: "Feed", tabBarLabel: "Feed" }} />
-        <Tabs.Screen name="(tabs)/explore" options={{ title: "Explore", tabBarLabel: "Explore" }} />
-        <Tabs.Screen name="(tabs)/pools" options={{ title: "Pools", tabBarLabel: "Pools" }} />
-        <Tabs.Screen
-          name="(tabs)/mini-apps"
-          options={{ title: "Mini Apps", tabBarLabel: "Mini Apps" }}
-        />
-        <Tabs.Screen name="(tabs)/profile" options={{ title: "Profile", tabBarLabel: "Profile" }} />
-        <Tabs.Screen name="connect" options={{ href: null, title: "Connect Wallet" }} />
-        {/* Detail screens — hidden from tab bar */}
-        <Tabs.Screen name="post/[id]" options={{ href: null, headerShown: true, title: "Post" }} />
-        <Tabs.Screen
-          name="profile/[address]"
-          options={{ href: null, headerShown: true, title: "Profile" }}
-        />
-        <Tabs.Screen name="pool/[id]" options={{ href: null, headerShown: true, title: "Pool" }} />
-      </Tabs>
+      <ToastProvider>
+        <Tabs
+          screenOptions={{
+            headerShown: true,
+            headerStyle: {
+              backgroundColor: theme.colors.surface.background,
+            },
+            headerTitleStyle: {
+              color: theme.colors.text.primary,
+              fontWeight: "700",
+            },
+            headerTintColor: theme.colors.text.primary,
+            headerRight: () => <HeaderWalletAddress />,
+            tabBarActiveTintColor: theme.colors.brand.primary,
+            tabBarInactiveTintColor: theme.colors.text.secondary,
+            tabBarStyle: {
+              backgroundColor: theme.colors.surface.background,
+              borderTopColor: theme.colors.surface.border,
+            },
+          }}
+        >
+          <Tabs.Screen name="(tabs)/feed" options={{ title: "Feed", tabBarLabel: "Feed" }} />
+          <Tabs.Screen name="(tabs)/explore" options={{ title: "Explore", tabBarLabel: "Explore" }} />
+          <Tabs.Screen name="(tabs)/pools" options={{ title: "Pools", tabBarLabel: "Pools" }} />
+          <Tabs.Screen
+            name="(tabs)/mini-apps"
+            options={{ title: "Mini Apps", tabBarLabel: "Mini Apps" }}
+          />
+          <Tabs.Screen name="(tabs)/profile" options={{ title: "Profile", tabBarLabel: "Profile" }} />
+          <Tabs.Screen name="settings" options={{ href: null, title: "Settings" }} />
+          <Tabs.Screen name="settings/blocked" options={{ href: null, title: "Blocked Users" }} />
+          <Tabs.Screen name="connect" options={{ href: null, title: "Connect Wallet" }} />
+          {/* Detail screens — hidden from tab bar */}
+          <Tabs.Screen name="post/[id]" options={{ href: null, headerShown: true, title: "Post" }} />
+          <Tabs.Screen
+            name="profile/[address]"
+            options={{ href: null, headerShown: true, title: "Profile" }}
+          />
+          <Tabs.Screen name="pool/[id]" options={{ href: null, headerShown: true, title: "Pool" }} />
+        </Tabs>
+      </ToastProvider>
     </WalletProvider>
   );
 }
@@ -132,12 +146,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1e293b",
     borderWidth: 1,
-    borderColor: "#334155",
   },
   headerWalletText: {
-    color: "#e2e8f0",
     fontSize: 12,
     fontWeight: "700",
     fontFamily: "monospace",

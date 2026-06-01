@@ -5,6 +5,9 @@ import { useRouter } from "expo-router";
 import { PoolRow, PoolSearchResult } from "../../components/PoolRow";
 import { ProfileRow, ProfileSearchResult } from "../../components/ProfileRow";
 import { SearchBar } from "../../components/SearchBar";
+import { PoolCardSkeleton } from "../../components/skeletons/PoolCardSkeleton";
+import { ProfileCardSkeleton } from "../../components/skeletons/ProfileCardSkeleton";
+import { useTheme } from "../../theme/useTheme";
 
 const DEBOUNCE_MS = 300;
 
@@ -87,6 +90,8 @@ async function searchCatalog(query: string): Promise<SearchResults> {
 }
 
 export default function ExploreScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -153,9 +158,13 @@ export default function ExploreScreen() {
         contentContainerStyle={[styles.content, !hasResults && styles.centerContent]}
       >
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color="#6366f1" />
-            <Text style={styles.muted}>Searching...</Text>
+          <View style={styles.loadingStack}>
+            <ProfileCardSkeleton />
+            <PoolCardSkeleton />
+            <View style={styles.center}>
+              <ActivityIndicator color={theme.colors.brand.primary} />
+              <Text style={styles.muted}>Searching...</Text>
+            </View>
           </View>
         ) : error ? (
           <View style={styles.center}>
@@ -217,68 +226,73 @@ export default function ExploreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-  },
-  content: {
-    paddingBottom: 24,
-  },
-  centerContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
-  center: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-  },
-  muted: {
-    color: "#94a3b8",
-    fontSize: 13,
-    marginTop: 10,
-  },
-  emptyTitle: {
-    color: "#f8fafc",
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  emptyText: {
-    color: "#94a3b8",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  errorTitle: {
-    color: "#fecaca",
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  errorText: {
-    color: "#fca5a5",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  summary: {
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: "700",
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
-  section: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    color: "#e2e8f0",
-    fontSize: 13,
-    fontWeight: "800",
-    marginHorizontal: 16,
-    marginBottom: 4,
-    textTransform: "uppercase",
-  },
-});
+function createStyles(theme: ReturnType<typeof useTheme>["theme"]) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.surface.background,
+    },
+    content: {
+      paddingBottom: 24,
+    },
+    centerContent: {
+      flexGrow: 1,
+      justifyContent: "center",
+    },
+    loadingStack: {
+      gap: 8,
+    },
+    center: {
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 32,
+    },
+    muted: {
+      color: theme.colors.text.secondary,
+      fontSize: 13,
+      marginTop: 10,
+    },
+    emptyTitle: {
+      color: theme.colors.text.primary,
+      fontSize: 18,
+      fontWeight: "800",
+      marginBottom: 6,
+    },
+    emptyText: {
+      color: theme.colors.text.secondary,
+      fontSize: 14,
+      textAlign: "center",
+    },
+    errorTitle: {
+      color: theme.colors.semantic.error,
+      fontSize: 18,
+      fontWeight: "800",
+      marginBottom: 6,
+    },
+    errorText: {
+      color: theme.colors.semantic.error,
+      fontSize: 14,
+      textAlign: "center",
+    },
+    summary: {
+      color: theme.colors.text.secondary,
+      fontSize: 12,
+      fontWeight: "700",
+      marginHorizontal: 16,
+      marginTop: 8,
+      marginBottom: 8,
+      textTransform: "uppercase",
+    },
+    section: {
+      marginTop: 8,
+    },
+    sectionTitle: {
+      color: theme.colors.text.primary,
+      fontSize: 13,
+      fontWeight: "800",
+      marginHorizontal: 16,
+      marginBottom: 4,
+      textTransform: "uppercase",
+    },
+  });
+}

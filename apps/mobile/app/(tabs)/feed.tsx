@@ -1,7 +1,10 @@
-import React from "react";
-import { FlatList, View, Text, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
-import { PostCard, PostCardSkeleton, Post } from "../../components/PostCard";
+import React, { useMemo } from "react";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+
+import { PostCard, Post } from "../../components/PostCard";
+import { PostCardSkeleton } from "../../components/skeletons/PostCardSkeleton";
 import { useFeed } from "../../hooks/useFeed";
+import { useTheme } from "../../theme/useTheme";
 
 const SKELETON_COUNT = 4;
 
@@ -15,7 +18,7 @@ function SkeletonList() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ styles }: { styles: ReturnType<typeof createStyles> }) {
   return (
     <View style={styles.center}>
       <Text style={styles.emptyIcon}>📭</Text>
@@ -25,7 +28,13 @@ function EmptyState() {
   );
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({
+  message,
+  styles,
+}: {
+  message: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.center}>
       <Text style={styles.errorText}>{message}</Text>
@@ -34,6 +43,8 @@ function ErrorState({ message }: { message: string }) {
 }
 
 export default function FeedScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { posts, loading, error, loadMore, refresh } = useFeed();
 
   const isInitialLoad = loading && posts.length === 0;
@@ -47,7 +58,7 @@ export default function FeedScreen() {
   }
 
   if (error && posts.length === 0) {
-    return <ErrorState message={error} />;
+    return <ErrorState message={error} styles={styles} />;
   }
 
   return (
@@ -57,10 +68,10 @@ export default function FeedScreen() {
       data={posts}
       keyExtractor={(item) => String(item.id)}
       renderItem={({ item }) => <PostCard post={item} />}
-      ListEmptyComponent={<EmptyState />}
+      ListEmptyComponent={<EmptyState styles={styles} />}
       ListFooterComponent={
         loading && posts.length > 0 ? (
-          <ActivityIndicator style={styles.footer} color="#6366f1" size="small" />
+          <ActivityIndicator style={styles.footer} color={theme.colors.brand.primary} size="small" />
         ) : null
       }
       onEndReached={loadMore}
@@ -69,53 +80,55 @@ export default function FeedScreen() {
         <RefreshControl
           refreshing={loading && posts.length > 0}
           onRefresh={refresh}
-          tintColor="#6366f1"
-          colors={["#6366f1"]}
+          tintColor={theme.colors.brand.primary}
+          colors={[theme.colors.brand.primary]}
         />
       }
     />
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-  },
-  listContent: {
-    paddingVertical: 8,
-  },
-  emptyContainer: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f1f5f9",
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#64748b",
-    textAlign: "center",
-  },
-  errorText: {
-    color: "#f87171",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  footer: {
-    paddingVertical: 16,
-  },
-});
+function createStyles(theme: ReturnType<typeof useTheme>["theme"]) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.surface.background,
+    },
+    listContent: {
+      paddingVertical: 8,
+    },
+    emptyContainer: {
+      flex: 1,
+    },
+    center: {
+      flex: 1,
+      backgroundColor: theme.colors.surface.background,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 32,
+    },
+    emptyIcon: {
+      fontSize: 48,
+      marginBottom: 12,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.colors.text.primary,
+      marginBottom: 6,
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      color: theme.colors.text.secondary,
+      textAlign: "center",
+    },
+    errorText: {
+      color: theme.colors.semantic.error,
+      fontSize: 14,
+      textAlign: "center",
+    },
+    footer: {
+      paddingVertical: 16,
+    },
+  });
+}
