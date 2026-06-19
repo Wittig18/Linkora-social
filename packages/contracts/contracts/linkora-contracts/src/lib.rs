@@ -153,6 +153,7 @@ pub struct GovProposal {
     pub votes_for: u32,
     pub votes_against: u32,
     pub created_ledger: u32,
+    pub time_lock_ledgers: u32,
     pub status: GovStatus,
 }
 
@@ -1055,8 +1056,13 @@ impl LinkoraContract {
         Self::bump_temp(&env, &cooldown_key);
 
         let fee_bps = Self::get_fee_bps(env.clone());
-        let fee_amount = (amount * fee_bps as i128) / 10_000;
+        let fee_amount = (amount / 10_000) * fee_bps as i128
+            + (amount % 10_000) * fee_bps as i128 / 10_000;
         let author_amount = amount - fee_amount;
+        post.tip_total += author_amount;
+        env.storage().persistent().set(&key, &post);
+        Self::bump(&env, &key);
+
         let token_client = token::Client::new(&env, &token);
 
         if fee_amount > 0 {
@@ -1068,10 +1074,6 @@ impl LinkoraContract {
             token_client.transfer(&tipper, &treasury, &fee_amount);
         }
         token_client.transfer(&tipper, &post.author, &author_amount);
-
-        post.tip_total += amount;
-        env.storage().persistent().set(&key, &post);
-        Self::bump(&env, &key);
 
         TipEvent {
             tipper,
@@ -1144,14 +1146,15 @@ impl LinkoraContract {
             .expect("pool not found");
         assert!(pool.token == token, "wrong token for pool");
 
+        pool.balance += amount;
+        env.storage().persistent().set(&key, &pool);
+        Self::bump(&env, &key);
+
         token::Client::new(&env, &token).transfer(
             &depositor,
             env.current_contract_address(),
             &amount,
         );
-        pool.balance += amount;
-        env.storage().persistent().set(&key, &pool);
-        Self::bump(&env, &key);
 
         PoolDepositEvent {
             depositor,
@@ -1450,7 +1453,7 @@ impl LinkoraContract {
         }
 
         let config_key = StorageKey::GovConfig;
-        let _config: GovConfig = env
+        let config: GovConfig = env
             .storage()
             .persistent()
             .get(&config_key)
@@ -1469,6 +1472,7 @@ impl LinkoraContract {
             votes_for: 0,
             votes_against: 0,
             created_ledger: env.ledger().sequence(),
+            time_lock_ledgers: config.time_lock_ledgers,
             status: GovStatus::Active,
         };
 
@@ -1589,7 +1593,7 @@ impl LinkoraContract {
 
         let current_ledger = env.ledger().sequence();
         let vote_end = proposal.created_ledger + config.vote_window_ledgers;
-        let execution_after = vote_end + config.time_lock_ledgers;
+        let execution_after = vote_end + proposal.time_lock_ledgers as u64;
         assert!(current_ledger >= execution_after, "time-lock not expired");
 
         let total_votes = proposal.votes_for + proposal.votes_against;
@@ -1620,6 +1624,10 @@ impl LinkoraContract {
             GovParameter::GovQuorum => {
                 let val = proposal.new_value as u32;
                 assert!(val > 0 && val <= 100, "quorum must be 1-100");
+                assert!(
+                    val >= config.quorum_floor,
+                    "quorum must be >= quorum_floor"
+                );
                 let mut cfg = config.clone();
                 cfg.quorum = val;
                 env.storage().persistent().set(&StorageKey::GovConfig, &cfg);
