@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
-    Map, String, Symbol, Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, symbol_short, token,
+    Address, BytesN, Env, Map, String, Symbol, Vec,
 };
 
 // ── Storage Key Enum ──────────────────────────────────────────────────────────
@@ -1971,14 +1971,22 @@ impl LinkoraContract {
         let mut following_count = 0;
         if env.storage().persistent().has(&following_count_key) {
             keys.push_back(following_count_key.clone());
-            following_count = env.storage().persistent().get::<_, u32>(&following_count_key).unwrap_or(0);
+            following_count = env
+                .storage()
+                .persistent()
+                .get::<_, u32>(&following_count_key)
+                .unwrap_or(0);
         }
 
         let followers_count_key = StorageKey::FollowersCount(user.clone());
         let mut followers_count = 0;
         if env.storage().persistent().has(&followers_count_key) {
             keys.push_back(followers_count_key.clone());
-            followers_count = env.storage().persistent().get::<_, u32>(&followers_count_key).unwrap_or(0);
+            followers_count = env
+                .storage()
+                .persistent()
+                .get::<_, u32>(&followers_count_key)
+                .unwrap_or(0);
         }
 
         for seq in 0..following_count {

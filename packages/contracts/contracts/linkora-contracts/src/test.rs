@@ -3260,7 +3260,7 @@ fn test_profile_expiry_detection() {
     // Calling try_get_profile should fail with RentError::Expired (error code 1)
     let res = client.try_get_profile(&user);
     assert!(res.is_err());
-    
+
     if let Err(Ok(err)) = res {
         let expected_err = soroban_sdk::Error::from_contract_error(1);
         assert_eq!(err, expected_err);
@@ -3277,7 +3277,7 @@ fn test_pay_rent_extends_ttl() {
 
     let user = Address::generate(&env);
     let token_address = setup_token(&env, &admin);
-    
+
     // Mint tokens to user directly
     let token_client = StellarAssetClient::new(&env, &token_address);
     token_client.mint(&user, &100_000_000_000);
@@ -3333,7 +3333,9 @@ fn test_get_rent_expiry_minimum() {
 
     // Modify the TTL of followers count key to be lower
     let followers_count_key = StorageKey::FollowersCount(user.clone());
-    env.storage().persistent().extend_ttl(&followers_count_key, 100_000, 100_000);
+    env.storage()
+        .persistent()
+        .extend_ttl(&followers_count_key, 100_000, 100_000);
 
     let expected_expiry = env.ledger().sequence() + 100_000;
     assert_eq!(client.get_rent_expiry(&user), expected_expiry);
