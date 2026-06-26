@@ -26,7 +26,22 @@ export function createApp(db: Database, pg?: PgPool): express.Application {
   app.use(express.json());
 
   app.get("/health", (_req: Request, res: Response): void => {
-    res.json({ status: "ok" });
+    const backfill = getBackfillState();
+    res.json({
+      status: "ok",
+      backfill: backfill.active
+        ? {
+            active: true,
+            fromLedger: backfill.fromLedger,
+            toLedger: backfill.toLedger,
+            processedLedgers: backfill.processedLedgers,
+            totalLedgers:
+              backfill.toLedger !== undefined && backfill.fromLedger !== undefined
+                ? backfill.toLedger - backfill.fromLedger + 1
+                : undefined,
+          }
+        : { active: false },
+    });
   });
 
   // Apply rate limiting to all /api routes.
