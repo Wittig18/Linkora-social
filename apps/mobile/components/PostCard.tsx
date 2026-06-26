@@ -143,7 +143,7 @@ export function PostCard(props: PostCardProps) {
             {liked ? "Liked" : "Like"} {likeCount}
           </Text>
         </Pressable>
-        <Text style={styles.stat}>Tips {post.tip_total}</Text>
+        <Text style={styles.stat}>💰 {post.tip_total.toFixed(2)}</Text>
       </View>
     </TouchableOpacity>
   );

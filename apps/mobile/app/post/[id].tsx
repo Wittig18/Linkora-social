@@ -2,11 +2,13 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Alert, Pressable, StyleSheet, Text, View, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 
 import { useDeletePost } from "../../hooks/useDeletePost";
 import { getFeedPost } from "../../hooks/useFeed";
 import { useWallet } from "../../hooks/useWallet";
 import { useTheme } from "../../theme/useTheme";
+import { useToast } from "../../context/ToastContext";
 import { Post } from "../../components/PostCard";
 
 type PostParams = {
@@ -20,6 +22,7 @@ export default function PostDetailScreen() {
   const router = useRouter();
   const { address } = useWallet();
   const { deleting, deletePost } = useDeletePost();
+  const { showToast } = useToast();
 
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,12 +44,18 @@ export default function PostDetailScreen() {
 
   const isAuthor = Boolean(post && address === post.author);
 
+  const handleShare = async () => {
+    if (!post) return;
+    await Clipboard.setStringAsync(`linkora://post/${post.id}`);
+    showToast({ kind: "success", title: "Copied!", message: "Post link copied to clipboard." });
+  };
+
   const handleDeletePress = () => {
     if (!post) {
       return;
     }
 
-    Alert.alert("Delete post?", "This action cannot be undone.", [
+    Alert.alert("Delete post?", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -98,6 +107,17 @@ export default function PostDetailScreen() {
         <Text style={styles.stats}>
           Likes {post.like_count} | Tips {post.tip_total}
         </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Share post link"
+          onPress={handleShare}
+          style={({ pressed }) => [
+            styles.shareButton,
+            pressed && styles.shareButtonPressed,
+          ]}
+        >
+          <Text style={styles.shareButtonText}>Share</Text>
+        </Pressable>
       </View>
 
       {isAuthor ? (
@@ -196,6 +216,24 @@ function createStyles(theme: ReturnType<typeof useTheme>["theme"]) {
       color: theme.colors.text.onBrand,
       fontSize: 14,
       fontWeight: "800",
+    },
+    shareButton: {
+      minHeight: 32,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.colors.surface.border,
+      paddingHorizontal: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      alignSelf: "flex-start",
+    },
+    shareButtonPressed: {
+      opacity: 0.82,
+    },
+    shareButtonText: {
+      color: theme.colors.text.secondary,
+      fontSize: 12,
+      fontWeight: "700",
     },
   });
 }
