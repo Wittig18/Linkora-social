@@ -3238,3 +3238,163 @@ fn test_gov_veto_insufficient_pool_signers_panics() {
     let single_signer = vec![&env, pool_admins.get(0).unwrap()];
     client.gov_veto(&single_signer, &pool_id, &proposal_id);
 }
+
+// ── delete_post removes ID from author index and get_post returns None ─────────
+
+#[test]
+fn test_delete_post_removed_from_author_index_and_get_post_none() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _, _) = setup_contract(&env);
+
+    let author = Address::generate(&env);
+    let id1 = client.create_post(&author, &String::from_str(&env, "post 1"));
+    let id2 = client.create_post(&author, &String::from_str(&env, "post 2"));
+    let id3 = client.create_post(&author, &String::from_str(&env, "post 3"));
+
+    // Delete the middle post
+    client.delete_post(&author, &id2);
+
+    // get_posts_by_author must no longer include the deleted post ID
+    let page = client.get_posts_by_author(&author, &0, &10);
+    assert_eq!(page.len(), 2, "deleted post must be removed from author index");
+    assert!(
+        !page.iter().any(|id| id == id2),
+        "deleted post ID must not appear in get_posts_by_author"
+    );
+    assert!(page.iter().any(|id| id == id1));
+    assert!(page.iter().any(|id| id == id3));
+
+    // get_post must return None for the deleted post
+    assert!(
+        client.get_post(&id2).is_none(),
+        "get_post must return None for a deleted post"
+    );
+    // The surviving posts are still retrievable
+    assert!(client.get_post(&id1).is_some());
+    assert!(client.get_post(&id3).is_some());
+}
+
+// ── create_post content boundary: 280 succeeds, 281 panics ────────────────────
+
+#[test]
+fn test_create_post_280_chars_boundary_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _, _) = setup_contract(&env);
+
+    let author = Address::generate(&env);
+    let content_str = "a".repeat(280);
+    let content = String::from_str(&env, &content_str);
+    assert_eq!(content.len(), 280);
+
+    // Exactly 280 characters must succeed
+    let post_id = client.create_post(&author, &content);
+    let post = client.get_post(&post_id).unwrap();
+    assert_eq!(post.content, content);
+    assert_eq!(post.content.len(), 280);
+}
+
+#[test]
+#[should_panic(expected = "content too long")]
+fn test_create_post_281_chars_boundary_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _, _) = setup_contract(&env);
+
+    let author = Address::generate(&env);
+    let content_str = "a".repeat(281);
+    let content = String::from_str(&env, &content_str);
+    assert_eq!(content.len(), 281);
+
+    // 281 characters must panic with "content too long"
+    client.create_post(&author, &content);
+}
+
+// ── Tip cooldown of 100 ledgers: reject immediate re-tip, allow after window ───
+
+#[test]
+#[should_panic(expected = "tip cooldown not expired")]
+fn test_tip_cooldown_100_ledgers_immediate_retip_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let author = Address::generate(&env);
+    let tipper = Address::generate(&env);
+
+    client.initialize(&admin, &treasury, &0);
+    client.set_tip_cooldown_window(&100);
+
+    let token = setup_token(&env, &tipper);
+    let post_id = client.create_post(&author, &String::from_str(&env, "cooldown 100 post"));
+
+    // First tip succeeds
+    client.tip(&tipper, &post_id, &token, &100);
+    // Immediate second tip within the 100-ledger window must panic
+    client.tip(&tipper, &post_id, &token, &100);
+}
+
+#[test]
+fn test_tip_cooldown_100_ledgers_allows_after_advance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let author = Address::generate(&env);
+    let tipper = Address::generate(&env);
+
+    client.initialize(&admin, &treasury, &0);
+    client.set_tip_cooldown_window(&100);
+
+    let token = setup_token(&env, &tipper);
+    let post_id = client.create_post(&author, &String::from_str(&env, "cooldown 100 post"));
+
+    // First tip succeeds
+    client.tip(&tipper, &post_id, &token, &100);
+
+    // Advance the ledger by exactly the 100-ledger cooldown window
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 100;
+    });
+
+    // Tip succeeds again once the cooldown has elapsed
+    client.tip(&tipper, &post_id, &token, &100);
+
+    let post = client.get_post(&post_id).unwrap();
+    assert_eq!(
+        post.tip_total, 200,
+        "both tips must accumulate once the 100-ledger cooldown expires"
+    );
+}
+
+// ── pool_withdraw on a zero-balance pool panics with "low balance" ────────────
+
+#[test]
+#[should_panic(expected = "low balance")]
+fn test_pool_withdraw_zero_balance_panics_low_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // 1-of-1 pool with zero balance (no deposit performed)
+    let (client, _, pool_id, _token, admins) = setup_pool(&env, 1, 1, 0);
+    let recipient = Address::generate(&env);
+
+    assert_eq!(
+        client.get_pool(&pool_id).unwrap().balance,
+        0,
+        "pool must start with a zero balance"
+    );
+
+    // Withdrawing any positive amount from an empty pool must panic with "low balance"
+    let signers = vec![&env, admins.get(0).unwrap()];
+    client.pool_withdraw(&signers, &pool_id, &1, &recipient);
+}
