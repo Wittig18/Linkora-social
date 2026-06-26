@@ -1,11 +1,12 @@
 #![cfg(test)]
+extern crate alloc;
 
 use super::*;
 use soroban_sdk::{
     symbol_short,
-    testutils::{storage::Persistent as _, Address as _, Events, Ledger},
+    testutils::{Address as _, Events, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
-    vec, Address, BytesN, Env, String,
+    vec, Address, Bytes, BytesN, Env, String,
 };
 
 fn setup_token(env: &Env, admin: &Address) -> Address {
@@ -294,6 +295,67 @@ fn test_get_posts_by_author_limit_exceeds_maximum() {
 }
 
 #[test]
+fn test_get_posts_by_author_offset_beyond_list_length_returns_empty() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let author = Address::generate(&env);
+
+    for i in 0..5 {
+        client.create_post(&author, &String::from_str(&env, &alloc::format!("post {i}")));
+    }
+
+    // Offset is past the end of the 5-item list.
+    let page = client.get_posts_by_author(&author, &5, &10);
+    assert_eq!(page.len(), 0);
+
+    let page_far = client.get_posts_by_author(&author, &100, &10);
+    assert_eq!(page_far.len(), 0);
+}
+
+#[test]
+fn test_get_posts_by_author_offset_plus_limit_beyond_end_returns_remaining() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let author = Address::generate(&env);
+
+    let mut ids = Vec::new(&env);
+    for i in 0..10 {
+        ids.push_back(client.create_post(&author, &String::from_str(&env, &alloc::format!("post {i}"))));
+    }
+
+    // offset (8) + limit (10) = 18, which is beyond the 10-item list,
+    // so only the 2 remaining items should be returned.
+    let page = client.get_posts_by_author(&author, &8, &10);
+    assert_eq!(page.len(), 2);
+    assert_eq!(page.get(0).unwrap(), ids.get(8).unwrap());
+    assert_eq!(page.get(1).unwrap(), ids.get(9).unwrap());
+}
+
+#[test]
+fn test_get_posts_by_author_limit_50_max_allowed_returns_all() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let author = Address::generate(&env);
+
+    for i in 0..50 {
+        client.create_post(&author, &String::from_str(&env, &alloc::format!("post {i}")));
+    }
+
+    // limit = 50 is the maximum allowed value and must not panic.
+    let page = client.get_posts_by_author(&author, &0, &50);
+    assert_eq!(page.len(), 50);
+}
+
+#[test]
 fn test_get_posts_by_author_after_delete() {
     let env = Env::default();
     env.mock_all_auths();
@@ -555,6 +617,29 @@ fn test_blocked_follow_panics() {
 
     // Alice tries to follow Bob
     client.follow(&alice, &bob);
+}
+
+#[test]
+fn test_blocked_user_cannot_follow_blocker_no_relationship_created() {
+    // After block_user(A, B), follow(B, A) must panic with "blocked" and
+    // must not create a follow relationship between B and A.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _, _) = setup_contract(&env);
+
+    let a = Address::generate(&env);
+    let b = Address::generate(&env);
+
+    // A blocks B
+    client.block_user(&a, &b);
+
+    // B tries to follow A — must panic with "blocked"
+    let result = client.try_follow(&b, &a);
+    assert!(result.is_err());
+
+    // No follow relationship was created in either direction
+    assert_eq!(client.get_following(&b, &0, &50).len(), 0);
+    assert_eq!(client.get_followers(&a, &0, &50).len(), 0);
 }
 
 #[test]
@@ -925,6 +1010,31 @@ fn test_initialize_twice_panics() {
     client.initialize(&admin, &treasury, &0);
 }
 
+// A rejected re-initialize must leave the original configuration intact (#690).
+// `try_initialize` captures the failure without aborting the test so we can then
+// assert the stored treasury/fee were not overwritten by the second call.
+#[test]
+fn test_initialize_twice_preserves_state() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    client.initialize(&admin, &treasury, &250);
+
+    // Attempt to re-initialize with different admin/treasury/fee — must fail.
+    let other_admin = Address::generate(&env);
+    let other_treasury = Address::generate(&env);
+    let result = client.try_initialize(&other_admin, &other_treasury, &999);
+    assert!(result.is_err());
+
+    // Original treasury and fee remain unchanged.
+    assert_eq!(client.get_treasury(), Some(treasury));
+    assert_eq!(client.get_fee_bps(), 250);
+}
+
 #[test]
 #[should_panic]
 fn test_upgrade_by_admin_succeeds() {
@@ -1210,6 +1320,45 @@ fn test_unfollow_noop_no_event() {
     // Verify both indexes are still empty
     assert_eq!(client.get_following(&alice, &0, &10).len(), 0);
     assert_eq!(client.get_followers(&bob, &0, &10).len(), 0);
+}
+
+#[test]
+fn test_unfollow_nonexistent_relationship_is_noop_emits_event_counts_stay_zero() {
+    // unfollow(A, B) when A does not follow B must not panic, must still emit
+    // an UnfollowEvent (current behaviour), and must leave both counts at 0.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _, _) = setup_contract(&env);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    client.unfollow(&alice, &bob);
+
+    // UnfollowEvent is published even though there was no existing edge.
+    let all_events = env.events().all();
+    let events = all_events.events();
+    assert!(!events.is_empty());
+
+    // Counts remain at 0 on both sides.
+    assert_eq!(client.get_following(&alice, &0, &10).len(), 0);
+    assert_eq!(client.get_followers(&bob, &0, &10).len(), 0);
+
+    let contract_id = client.address.clone();
+    env.as_contract(&contract_id, || {
+        let following_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&StorageKey::FollowingCount(alice.clone()))
+            .unwrap_or(0);
+        let followers_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&StorageKey::FollowersCount(bob.clone()))
+            .unwrap_or(0);
+        assert_eq!(following_count, 0);
+        assert_eq!(followers_count, 0);
+    });
 }
 
 // ── Post content length validation tests (issue #194) ────────────────────────────
@@ -2984,6 +3133,50 @@ fn test_migrate_follow_graph_rejects_oversized_batch() {
     }
 
     client.migrate_follow_graph(&users);
+}
+
+#[test]
+fn test_duplicate_follow_is_idempotent() {
+    // Calling follow(A, B) twice must not increment FollowersCount/FollowingCount
+    // beyond 1, and must not create a second index entry for the same edge.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _, _) = setup_contract(&env);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    client.follow(&alice, &bob);
+    client.follow(&alice, &bob);
+
+    assert_eq!(client.get_following(&alice, &0, &50).len(), 1);
+    assert_eq!(client.get_followers(&bob, &0, &50).len(), 1);
+
+    let contract_id = client.address.clone();
+    env.as_contract(&contract_id, || {
+        let following_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&StorageKey::FollowingCount(alice.clone()))
+            .unwrap_or(0);
+        let followers_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&StorageKey::FollowersCount(bob.clone()))
+            .unwrap_or(0);
+        assert_eq!(following_count, 1);
+        assert_eq!(followers_count, 1);
+
+        // No second index entry should have been written for the duplicate follow.
+        assert!(!env
+            .storage()
+            .persistent()
+            .has(&StorageKey::FollowingIdx(alice.clone(), 1)));
+        assert!(!env
+            .storage()
+            .persistent()
+            .has(&StorageKey::FollowersIdx(bob.clone(), 1)));
+    });
 }
 
 #[test]
