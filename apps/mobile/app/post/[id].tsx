@@ -1,7 +1,7 @@
 // Post detail screen — shows full content, like count, tip total, author info.
 import React, { useMemo, useState, useEffect } from "react";
 import { Alert, Pressable, StyleSheet, Text, View, ActivityIndicator } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 
 import { useDeletePost } from "../../hooks/useDeletePost";
@@ -95,9 +95,16 @@ export default function PostDetailScreen() {
   }
 
   return (
-    <View style={[styles.container, styles.content]}>
-      <Text style={styles.label}>Post</Text>
-      <Text style={styles.id}>#{post.id}</Text>
+    <>
+      <Stack.Screen
+        options={{
+          gestureEnabled: true,
+          headerBackVisible: true,
+        }}
+      />
+      <View style={[styles.container, styles.content]}>
+        <Text style={styles.label}>Post</Text>
+        <Text style={styles.id}>#{post.id}</Text>
       <View style={styles.card}>
         <View style={styles.header}>
           <Text style={styles.username}>{post.username}</Text>
@@ -135,7 +142,8 @@ export default function PostDetailScreen() {
           <Text style={styles.deleteButtonText}>{deleting ? "Deleting..." : "Delete post"}</Text>
         </Pressable>
       ) : null}
-    </View>
+      </View>
+    </>
   );
 }
 
