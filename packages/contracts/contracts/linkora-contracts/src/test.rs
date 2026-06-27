@@ -321,7 +321,10 @@ fn test_get_posts_by_author_offset_beyond_list_length_returns_empty() {
     let author = Address::generate(&env);
 
     for i in 0..5 {
-        client.create_post(&author, &String::from_str(&env, &alloc::format!("post {i}")));
+        client.create_post(
+            &author,
+            &String::from_str(&env, &alloc::format!("post {i}")),
+        );
     }
 
     // Offset is past the end of the 5-item list.
@@ -343,7 +346,10 @@ fn test_get_posts_by_author_offset_plus_limit_beyond_end_returns_remaining() {
 
     let mut ids = Vec::new(&env);
     for i in 0..10 {
-        ids.push_back(client.create_post(&author, &String::from_str(&env, &alloc::format!("post {i}"))));
+        ids.push_back(client.create_post(
+            &author,
+            &String::from_str(&env, &alloc::format!("post {i}")),
+        ));
     }
 
     // offset (8) + limit (10) = 18, which is beyond the 10-item list,
@@ -364,7 +370,10 @@ fn test_get_posts_by_author_limit_50_max_allowed_returns_all() {
     let author = Address::generate(&env);
 
     for i in 0..50 {
-        client.create_post(&author, &String::from_str(&env, &alloc::format!("post {i}")));
+        client.create_post(
+            &author,
+            &String::from_str(&env, &alloc::format!("post {i}")),
+        );
     }
 
     // limit = 50 is the maximum allowed value and must not panic.
@@ -559,10 +568,7 @@ fn test_tip_block_preserves_no_state_changes_on_panic() {
     client.initialize(&admin, &treasury, &250);
 
     let token = setup_token(&env, &tipper);
-    let post_id = client.create_post(
-        &author,
-        &String::from_str(&env, "block-prevented tip post"),
-    );
+    let post_id = client.create_post(&author, &String::from_str(&env, "block-prevented tip post"));
 
     // Author blocks tipper.
     client.block_user(&author, &tipper);
@@ -673,8 +679,8 @@ fn test_tip_block_is_unidirectional_blocker_can_still_tip_blocked() {
     );
     assert_eq!(
         token_client.balance(&blocked_user),
-        975,
-        "blocked_user (the author) still receives their share of the tip"
+        10_975,
+        "blocked_user (the author) still receives their share of the tip (10_000 minted at setup + 975 tip share)"
     );
 
     let post = client.get_post(&post_id).unwrap();
@@ -719,15 +725,9 @@ fn test_tip_block_multiple_blocked_tippers_panic_independently() {
 
     // Each blocked user independently fails on the same post.
     let r_a = client.try_tip(&blocked_a, &post_id, &token, &1_000);
-    assert!(
-        r_a.is_err(),
-        "first blocked tipper must be rejected"
-    );
+    assert!(r_a.is_err(), "first blocked tipper must be rejected");
     let r_b = client.try_tip(&blocked_b, &post_id, &token, &1_000);
-    assert!(
-        r_b.is_err(),
-        "second blocked tipper must be rejected"
-    );
+    assert!(r_b.is_err(), "second blocked tipper must be rejected");
 
     // An unrelated, unblocked tipper succeeds and pays the fee.
     client.tip(&unblocked, &post_id, &token, &500);
@@ -2885,6 +2885,64 @@ fn test_set_tip_cooldown_window_valid_value_is_stored() {
     );
 }
 
+// ── Issue #723: tip amount must be positive (rejects 0 and negatives) ─────
+
+#[test]
+#[should_panic(expected = "tip amount must be positive")]
+fn test_tip_amount_zero_panics() {
+    // Calling tip(tipper, post_id, token, 0) must panic with
+    // "tip amount must be positive". The 0 amount is rejected by the very
+    // first assertion in tip(), before any auth, post-lookup, cooldown check,
+    // token transfer, or tip_total update is performed.
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let author = Address::generate(&env);
+    let tipper = Address::generate(&env);
+
+    client.initialize(&admin, &treasury, &0);
+
+    let token = setup_token(&env, &tipper);
+    let post_id = client.create_post(&author, &String::from_str(&env, "tip amount boundary"));
+
+    // The call below MUST panic with the expected message. The
+    // #[should_panic(expected = ...)] attribute enforces it.
+    client.tip(&tipper, &post_id, &token, &0);
+}
+
+#[test]
+#[should_panic(expected = "tip amount must be positive")]
+fn test_tip_amount_negative_panics() {
+    // Calling tip(tipper, post_id, token, -1) must panic with
+    // "tip amount must be positive". A negative amount is meaningless and
+    // dangerous (it could underflow subtraction of the fee from amount and
+    // produce incorrect accounting). The first assertion (`amount > 0`) in
+    // tip() rejects it before any state can be touched.
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let author = Address::generate(&env);
+    let tipper = Address::generate(&env);
+
+    client.initialize(&admin, &treasury, &0);
+
+    let token = setup_token(&env, &tipper);
+    let post_id = client.create_post(&author, &String::from_str(&env, "tip amount boundary"));
+
+    // The call below MUST panic with the expected message.
+    client.tip(&tipper, &post_id, &token, &-1);
+}
+
 // ── Issue #321: profile_count decrement on profile deletion ───────────────────
 
 #[test]
@@ -3237,7 +3295,10 @@ fn test_gov_quorum_decay_effective_quorum_decreases_over_time() {
         li.sequence_number += 900;
     });
     let q1000 = client.effective_quorum(&proposal_id);
-    assert_eq!(q1000, 10, "quorum should decay to floor (10) after 1000 ledgers");
+    assert_eq!(
+        q1000, 10,
+        "quorum should decay to floor (10) after 1000 ledgers"
+    );
     assert!(q1000 < q100, "quorum must continue decreasing");
 }
 
@@ -3887,7 +3948,11 @@ fn test_delete_post_removed_from_author_index_and_get_post_none() {
 
     // get_posts_by_author must no longer include the deleted post ID
     let page = client.get_posts_by_author(&author, &0, &10);
-    assert_eq!(page.len(), 2, "deleted post must be removed from author index");
+    assert_eq!(
+        page.len(),
+        2,
+        "deleted post must be removed from author index"
+    );
     assert!(
         !page.iter().any(|id| id == id2),
         "deleted post ID must not appear in get_posts_by_author"
