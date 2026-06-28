@@ -48,6 +48,15 @@ export interface SimulationResult {
 }
 
 /**
+ * Interface representing a transaction structure that can be signed.
+ */
+export interface TransactionLike {
+  toEnvelope(): { toXDR(format: "base64"): string };
+  networkPassphrase?: string;
+  signatures?: Array<{ hint(): Buffer; signature(): Buffer }>;
+}
+
+/**
  * Interface for transaction signers (e.g., Freighter, Ledger, etc.)
  */
 export interface Signer {

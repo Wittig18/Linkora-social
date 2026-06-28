@@ -1,4 +1,4 @@
-import { Signer } from "../types";
+import { Signer, TransactionLike } from "../types";
 import { SigningError } from "../errors";
 
 declare const window:
@@ -11,13 +11,6 @@ declare const window:
     };
 
 type FreighterApi = NonNullable<NonNullable<typeof window>["freighter"]>;
-
-interface TransactionEnvelopeLike {
-  networkPassphrase: string;
-  toEnvelope(): {
-    toXDR(format: "base64"): string;
-  };
-}
 
 /**
  * Freighter signer implementation for browser extension.
@@ -70,7 +63,7 @@ export class FreighterSigner implements Signer {
    * Sign a transaction using Freighter
    * @param tx The transaction to sign (can be a Transaction object or XDR string)
    */
-  async signTransaction(tx: string | TransactionEnvelopeLike): Promise<unknown> {
+  async signTransaction(tx: string | TransactionLike): Promise<unknown> {
     const freighter = this.getFreighter();
     try {
       // If tx is a Transaction object, convert to XDR
@@ -81,7 +74,7 @@ export class FreighterSigner implements Signer {
       if (typeof tx !== "string") {
         const { TransactionBuilder } = await import("@stellar/stellar-sdk");
         // Parse the signed XDR back into a Transaction
-        return TransactionBuilder.fromXDR(signedXdr, tx.networkPassphrase);
+        return TransactionBuilder.fromXDR(signedXdr, tx.networkPassphrase ?? "");
       }
 
       return signedXdr;
