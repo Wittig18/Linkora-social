@@ -1,4 +1,4 @@
-import { Signer } from "../types";
+import { Signer, TransactionLike } from "../types";
 import { SigningError } from "../errors";
 
 declare const window: undefined | object;
@@ -145,12 +145,7 @@ export class LedgerSigner implements Signer {
    * @param derivationPath Stellar BIP-44 derivation path (default: "m/44'/148'/0'")
    */
   async signTransaction(
-    tx:
-      | string
-      | {
-          toEnvelope(): { toXDR(format: "base64"): string };
-          signatures: unknown[];
-        },
+    tx: string | TransactionLike,
     derivationPath: string = "m/44'/148'/0'"
   ): Promise<unknown> {
     try {
@@ -171,7 +166,11 @@ export class LedgerSigner implements Signer {
         const { Keypair, xdr } = await import("@stellar/stellar-sdk");
         const publicKey = await this.getPublicKey(derivationPath);
         const keypair = Keypair.fromPublicKey(publicKey);
-        tx.signatures.push(
+        const txObj = tx as { signatures?: unknown[] };
+        if (!txObj.signatures) {
+          txObj.signatures = [];
+        }
+        txObj.signatures.push(
           new xdr.DecoratedSignature({
             hint: keypair.signatureHint(),
             signature,

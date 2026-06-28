@@ -28,13 +28,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <OnboardingProvider>
             <NotificationsProvider>
               <NavBar />
-              <main>{children}</main>
+              <main id="main-content" tabIndex={-1} className="pb-16 md:pb-0">
+                {children}
+              </main>
             </NotificationsProvider>
           </OnboardingProvider>
-          <NotificationsProvider>
-            <NavBar />
-            <main id="main-content" tabIndex={-1}>{children}</main>
-          </NotificationsProvider>
         </WalletProvider>
       </body>
     </html>

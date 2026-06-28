@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useRef } from "react";
-import { FormEvent, useEffect, useState, forwardRef } from "react";
 import { validateSearchQuery } from "@/lib/validate";
 import { useSearchSuggestions, SearchSuggestion } from "@/hooks/useSearchSuggestions";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
@@ -24,7 +23,7 @@ export default function SearchBar({
   className = "w-full max-w-md",
   inputClassName = "",
   buttonLabel = "Search",
-  inputRef,
+  inputRef: forwardedInputRef,
 }: SearchBarProps) {
   const [query, setQuery] = useState(initialValue);
   const [isFocused, setIsFocused] = useState(false);
@@ -32,6 +31,15 @@ export default function SearchBar({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!forwardedInputRef) return;
+    if (typeof forwardedInputRef === "function") {
+      forwardedInputRef(inputRef.current);
+    } else {
+      (forwardedInputRef as any).current = inputRef.current;
+    }
+  }, [forwardedInputRef]);
 
   const { suggestions, loading, fetchSuggestions, clearSuggestions } = useSearchSuggestions();
   const { recentSearches, addRecentSearch, clearRecentSearches, removeRecentSearch } =
@@ -156,6 +164,7 @@ export default function SearchBar({
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setIsFocused(true)}
@@ -188,21 +197,6 @@ export default function SearchBar({
           id="search-suggestions"
           role="listbox"
           className="absolute z-50 mt-2 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-lg max-h-80 overflow-y-auto"
-    <form onSubmit={handleSubmit} className={className} role="search">
-      <div className="relative">
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          className={`w-full rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 md:px-4 py-2 pr-20 md:pr-24 text-[var(--foreground)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-violet-500 ${inputClassName}`}
-        />
-        <button
-          type="submit"
-          className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 rounded bg-violet-600 px-2 md:px-3 py-1 text-xs md:text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-          disabled={!validateSearchQuery(query).valid}
         >
           {loading && query.trim() && (
             <div className="px-4 py-3 text-sm text-[var(--text-muted)] flex items-center gap-2">
