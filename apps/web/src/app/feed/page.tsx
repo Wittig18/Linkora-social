@@ -107,6 +107,7 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(true);
   const [cursor, setCursor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Real-time updates via WebSocket
   const [hasNewPosts, setHasNewPosts] = useState(false);
@@ -258,6 +259,20 @@ export default function FeedPage() {
       if (el) observer.unobserve(el);
     };
   }, [loading, loadingMore, hasMore, posts, loadFeed]);
+
+  // Scroll to Top FAB
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 500);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   /* ── WebSocket Setup for Real-time indicator ───────────────────────── */
 
@@ -435,7 +450,7 @@ export default function FeedPage() {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <>
               {/* Error Message */}
               {error && (
                 <div
@@ -474,9 +489,9 @@ export default function FeedPage() {
                           />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-bold mb-1">
+                      <h2 className="text-lg font-bold mb-1">
                         You&apos;re not following anyone yet
-                      </h3>
+                      </h2>
                       <p className="text-[var(--text-muted)] text-sm mb-6 max-w-xs mx-auto">
                         Follow creators you like to see their latest posts in your feed.
                       </p>
@@ -519,7 +534,7 @@ export default function FeedPage() {
                           />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-bold mb-1">No posts found</h3>
+                      <h2 className="text-lg font-bold mb-1">No posts found</h2>
                       <p className="text-[var(--text-muted)] text-sm mb-6">
                         {activeTab === "following"
                           ? "Accounts you follow haven't posted yet."
@@ -554,21 +569,31 @@ export default function FeedPage() {
                   {hasMore && (
                     <div ref={sentinelRef} className="py-6 text-center">
                       {loadingMore ? (
-                        <span className="text-sm text-[var(--text-muted)] animate-pulse">
-                          Loading more posts…
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">
-                          Scroll down to load more
-                        </span>
-                      )}
+                        <div className="flex items-center justify-center gap-2">
+                          <Spinner />
+                          <span className="text-sm text-[var(--text-muted)]">Loading more posts…</span>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </>
               )}
-            </div>
+            </>
           )}
         </div>
+
+        {/* Scroll to Top FAB */}
+        {showScrollTop && (
+          <button
+            onClick={scrollToTop}
+            className="fixed bottom-8 right-8 w-12 h-12 bg-violet-600 hover:bg-violet-500 text-white rounded-full shadow-xl flex items-center justify-center transition-all z-40"
+            aria-label="Scroll to top"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+            </svg>
+          </button>
+        )}
 
         {/* Tipping Dialog Modal */}
         {tippingPost && (
@@ -579,6 +604,7 @@ export default function FeedPage() {
                 <button
                   onClick={handleCloseTipModal}
                   className="text-[var(--text-muted)] hover:text-[var(--foreground)] text-xl transition-colors"
+                  aria-label="Close tip modal"
                 >
                   ✕
                 </button>
@@ -642,5 +668,30 @@ export default function FeedPage() {
         )}
       </div>
     </OnboardingGuard>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg
+      className="animate-spin h-5 w-5 text-[var(--text-muted)]"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      ></circle>
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      ></path>
+    </svg>
   );
 }
