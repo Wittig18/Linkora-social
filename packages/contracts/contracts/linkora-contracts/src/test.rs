@@ -24,6 +24,11 @@ fn setup_contract(env: &Env) -> (LinkoraContractClient<'_>, Address, Address) {
     (client, admin, treasury)
 }
 
+fn upload_upgrade_wasm(env: &Env) -> BytesN<32> {
+    let wasm = Bytes::from_slice(env, include_bytes!("../linkora_contracts.wasm"));
+    env.deployer().upload_contract_wasm(wasm)
+}
+
 #[test]
 fn test_set_and_get_profile() {
     let env = Env::default();
@@ -1322,6 +1327,26 @@ fn test_initialize_stores_admin() {
 }
 
 #[test]
+fn test_initialize_stores_contract_state_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(LinkoraContract, ());
+    let client = LinkoraContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    client.initialize(&admin, &treasury, &0);
+
+    let state: ContractState = env
+        .storage()
+        .instance()
+        .get(&CONTRACT_STATE)
+        .expect("contract state should be initialized");
+    assert_eq!(state.version, 1);
+    assert_eq!(state.implementation_wasm_hash, None);
+}
+
+#[test]
 #[should_panic(expected = "already initialized")]
 fn test_initialize_twice_panics() {
     let env = Env::default();
@@ -1362,19 +1387,21 @@ fn test_initialize_twice_preserves_state() {
 }
 
 #[test]
-#[should_panic]
 fn test_upgrade_by_admin_succeeds() {
-    // upgrade() requires a WASM hash that exists in the ledger.
-    // In a unit-test environment there is no pre-uploaded WASM, so the call
-    // will panic with a storage error after auth passes.  The important thing
-    // being verified here is that admin auth is accepted (not rejected), which
-    // is confirmed by the panic originating from the WASM-lookup step rather
-    // than from require_auth.
     let env = Env::default();
-    let (client, _admin, _) = setup_contract(&env);
-    let mock_hash = BytesN::from_array(&env, &[0u8; 32]);
     env.mock_all_auths();
-    client.upgrade(&mock_hash);
+    let (client, _admin, _) = setup_contract(&env);
+    let wasm_hash = upload_upgrade_wasm(&env);
+
+    client.upgrade(&wasm_hash);
+
+    let state: ContractState = env
+        .storage()
+        .instance()
+        .get(&CONTRACT_STATE)
+        .expect("contract state should exist after upgrade");
+    assert_eq!(state.version, 2);
+    assert_eq!(state.implementation_wasm_hash, Some(wasm_hash));
 }
 
 #[test]
@@ -1403,19 +1430,15 @@ fn test_upgrade_before_initialize_panics() {
 }
 
 #[test]
-#[should_panic]
 fn test_upgrade_emits_contract_upgraded_event() {
-    // In a unit-test environment there is no pre-uploaded WASM, so upgrade()
-    // panics at the WASM-lookup step.  The ContractUpgraded event is emitted
-    // inside the contract before the host processes the WASM swap, so it
-    // appears in the failed-diagnostic-events log rather than the committed
-    // events list.  This test confirms that admin auth is accepted and the
-    // call reaches the upgrade logic (panicking on missing WASM, not on auth).
     let env = Env::default();
-    let (client, _admin, _) = setup_contract(&env);
-    let mock_hash = BytesN::from_array(&env, &[0u8; 32]);
     env.mock_all_auths();
-    client.upgrade(&mock_hash);
+    let (client, _admin, _) = setup_contract(&env);
+    let wasm_hash = upload_upgrade_wasm(&env);
+    let events_before = env.events().all().events().len();
+    client.upgrade(&wasm_hash);
+
+    assert!(env.events().all().events().len() > events_before);
 }
 
 // ── Fee boundary tests (issue #196) ─────────────────────────────────────────────

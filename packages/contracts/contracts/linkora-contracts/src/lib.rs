@@ -65,6 +65,7 @@ const TIP_COOLDOWN_WINDOW: Symbol = symbol_short!("TIP_CD_W");
 const REGISTERED_USERS: Symbol = symbol_short!("R_USERS");
 const RENT_RATE_BPS_KEY: Symbol = symbol_short!("RENT_BPS");
 const MODERATION_SLASH_BPS: Symbol = symbol_short!("MOD_SL_B");
+const CONTRACT_STATE: Symbol = symbol_short!("CT_STATE");
 
 // ── TTL Constants ─────────────────────────────────────────────────────────────
 //
@@ -120,6 +121,15 @@ pub struct Pool {
     pub balance: i128,
     pub admins: Vec<Address>,
     pub threshold: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ContractState {
+    /// Current contract schema / code version for migration tracking.
+    pub version: u32,
+    /// Last known implementation hash. Updated on each successful upgrade.
+    pub implementation_wasm_hash: Option<BytesN<32>>,
 }
 
 #[contracttype]
@@ -603,6 +613,13 @@ impl LinkoraContract {
             .instance()
             .set(&TIP_COOLDOWN_WINDOW, &TIP_COOLDOWN_LEDGERS);
         env.storage().instance().set(&MODERATION_SLASH_BPS, &0u32);
+        env.storage().instance().set(
+            &CONTRACT_STATE,
+            &ContractState {
+                version: 1,
+                implementation_wasm_hash: None,
+            },
+        );
     }
 
     // ── Profiles ──────────────────────────────────────────────────────────────
@@ -2099,6 +2116,13 @@ impl LinkoraContract {
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
         Self::bump_instance(&env);
         Self::require_admin(&env);
+        let mut state = Self::get_contract_state(&env);
+        state.version = state
+            .version
+            .checked_add(1)
+            .expect("contract version overflow");
+        state.implementation_wasm_hash = Some(new_wasm_hash.clone());
+        env.storage().instance().set(&CONTRACT_STATE, &state);
         env.deployer()
             .update_current_contract_wasm(new_wasm_hash.clone());
         ContractUpgraded { new_wasm_hash }.publish(&env);
@@ -2553,6 +2577,13 @@ impl LinkoraContract {
             .get(&ADMIN)
             .expect("not initialized");
         admin.require_auth();
+    }
+
+    fn get_contract_state(env: &Env) -> ContractState {
+        env.storage()
+            .instance()
+            .get(&CONTRACT_STATE)
+            .expect("not initialized")
     }
 
     /// Extend the TTL of a persistent entry after every write and on every
