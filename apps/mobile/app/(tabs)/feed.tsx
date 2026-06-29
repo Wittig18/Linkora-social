@@ -67,7 +67,9 @@ export default function FeedScreen() {
       contentContainerStyle={posts.length === 0 ? styles.emptyContainer : styles.listContent}
       data={posts}
       keyExtractor={(item) => String(item.id)}
-      renderItem={({ item }) => <PostCard post={item} />}
+      renderItem={({ item, index }) => (
+        <PostCard post={item} tourAnchor={index === 0} />
+      )}
       ListEmptyComponent={
         <EmptyState
           icon="📭"

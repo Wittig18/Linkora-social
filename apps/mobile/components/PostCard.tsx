@@ -31,6 +31,7 @@ export interface Post {
 interface FeedPostCardProps {
   post: Post;
   onPress?: () => void;
+  tourAnchor?: boolean;
 }
 
 interface LegacyPostCardProps {
@@ -132,7 +133,7 @@ export function PostCard(props: PostCardProps) {
 
       <Text style={styles.content}>{post.content}</Text>
 
-      <View style={styles.footer}>
+      <View style={styles.footer} testID={("tourAnchor" in props && props.tourAnchor) ? "guided-tour-post-actions" : undefined}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={

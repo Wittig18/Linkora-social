@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 
 import { useNetwork } from "../../hooks/useNetwork";
+import { useGuidedTour } from "../../context/GuidedTourContext";
 
 export default function SettingsScreen(): JSX.Element {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function SettingsScreen(): JSX.Element {
     resetRpcUrl,
     resetSettings,
   } = useNetwork();
+  const { resetTour } = useGuidedTour();
   const [draftRpcUrl, setDraftRpcUrl] = React.useState(rpcUrl);
   const [message, setMessage] = React.useState<string | null>(null);
 
@@ -131,6 +133,20 @@ export default function SettingsScreen(): JSX.Element {
         <View style={styles.codeBox}>
           <Text style={styles.code}>{contractId}</Text>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>Onboarding</Text>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => {
+            void resetTour();
+            router.push("/(tabs)/feed" as Parameters<typeof router.push>[0]);
+          }}
+          accessibilityRole="button"
+        >
+          <Text style={styles.secondaryButtonText}>Replay feature tour</Text>
+        </Pressable>
       </View>
 
       <View style={styles.section}>

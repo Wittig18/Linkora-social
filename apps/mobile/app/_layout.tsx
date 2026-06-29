@@ -8,6 +8,8 @@ import { registerForPushNotificationsAsync } from "../notifications/registerForP
 import { WalletProvider } from "../context/WalletContext";
 import { ToastProvider } from "../context/ToastContext";
 import { NetworkProvider } from "../context/NetworkContext";
+import { GuidedTourProvider } from "../context/GuidedTourContext";
+import { GuidedTour } from "../components/GuidedTour";
 import { useNetwork } from "../hooks/useNetwork";
 import { useWallet } from "../hooks/useWallet";
 import { parseDeepLink } from "../utils/deepLinks";
@@ -113,7 +115,10 @@ export default function RootLayout() {
     <NetworkProvider>
       <WalletProvider>
         <ToastProvider>
-          <RootNavigator />
+          <GuidedTourProvider>
+            <RootNavigator />
+            <GuidedTour />
+          </GuidedTourProvider>
         </ToastProvider>
       </WalletProvider>
     </NetworkProvider>
